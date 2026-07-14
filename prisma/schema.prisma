@@ -1,212 +1,294 @@
-/**
- * Seed script — populates realistic sample data for an existing user.
- *
- * Auth accounts are created through the normal sign-up flow (Better Auth
- * owns password hashing), so this script does NOT create a user. Sign up
- * once in the app first, then run:
- *
- *   npm run db:seed
- *
- * By default it seeds the most recently created user. Pass a specific
- * email with SEED_USER_EMAIL=you@example.com npm run db:seed.
- */
-import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { encryptSecret } from "../src/lib/encryption";
-import { DEFAULT_CATEGORIES } from "../src/features/categories/actions";
-
-const prisma = new PrismaClient();
-
-function daysFromNow(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date;
+generator client {
+  provider = "prisma-client-js"
 }
 
-async function main() {
-  const email = process.env.SEED_USER_EMAIL;
-  const user = email
-    ? await prisma.user.findUnique({ where: { email } })
-    : await prisma.user.findFirst({ orderBy: { createdAt: "desc" } });
-
-  if (!user) {
-    console.error(
-      "No user found. Sign up in the app first (npm run dev -> /sign-up), then re-run `npm run db:seed`."
-    );
-    process.exit(1);
-  }
-
-  console.log(`Seeding sample data for ${user.email}...`);
-
-  await prisma.category.createMany({
-    data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId: user.id, isSystem: true })),
-    skipDuplicates: true,
-  });
-  const categories = await prisma.category.findMany({ where: { userId: user.id } });
-  const categoryBySlug = new Map(categories.map((c) => [c.slug, c.id]));
-
-  const sampleAssets = [
-    {
-      name: "ChatGPT Plus",
-      vendor: "OpenAI",
-      categorySlug: "llms",
-      planName: "Plus",
-      priceCents: 2000,
-      billingCycle: "MONTHLY" as const,
-      renewalInDays: 5,
-      websiteUrl: "https://chat.openai.com",
-      billingUrl: "https://platform.openai.com/account/billing",
-      emailUsed: user.email,
-      priority: "HIGH" as const,
-      isFavorite: true,
-      credits: { total: 10000, used: 6400, period: "MONTHLY" as const, resetInDays: 1 },
-    },
-    {
-      name: "Midjourney",
-      vendor: "Midjourney Inc.",
-      categorySlug: "image-generation",
-      planName: "Standard",
-      priceCents: 3000,
-      billingCycle: "MONTHLY" as const,
-      renewalInDays: 12,
-      websiteUrl: "https://midjourney.com",
-      emailUsed: user.email,
-      priority: "MEDIUM" as const,
-    },
-    {
-      name: "Vercel Pro",
-      vendor: "Vercel",
-      categorySlug: "hosting",
-      planName: "Pro",
-      priceCents: 2000,
-      billingCycle: "MONTHLY" as const,
-      renewalInDays: 24,
-      websiteUrl: "https://vercel.com",
-      emailUsed: user.email,
-      priority: "HIGH" as const,
-    },
-    {
-      name: "namecheap.com",
-      vendor: "Namecheap",
-      categorySlug: "domains",
-      planName: "Domain registration",
-      priceCents: 1499,
-      billingCycle: "YEARLY" as const,
-      renewalInDays: 200,
-      websiteUrl: "https://namecheap.com",
-      emailUsed: user.email,
-      priority: "LOW" as const,
-    },
-    {
-      name: "ElevenLabs",
-      vendor: "ElevenLabs",
-      categorySlug: "voice-ai",
-      planName: "Creator",
-      priceCents: 2200,
-      billingCycle: "MONTHLY" as const,
-      renewalInDays: 2,
-      websiteUrl: "https://elevenlabs.io",
-      emailUsed: user.email,
-      priority: "MEDIUM" as const,
-      apiKey: "sk_demo_1234567890abcdef",
-      credits: { total: 30000, used: 28500, period: "MONTHLY" as const, resetInDays: 2 },
-    },
-    {
-      name: "Notion AI",
-      vendor: "Notion Labs",
-      categorySlug: "productivity",
-      planName: "Plus",
-      priceCents: 1000,
-      billingCycle: "MONTHLY" as const,
-      renewalInDays: 45,
-      websiteUrl: "https://notion.so",
-      emailUsed: user.email,
-      priority: "LOW" as const,
-      isFavorite: false,
-    },
-    {
-      name: "Old A/B testing tool",
-      vendor: "Split.io",
-      categorySlug: "analytics",
-      planName: "Starter",
-      priceCents: 4900,
-      billingCycle: "MONTHLY" as const,
-      renewalInDays: 9,
-      emailUsed: user.email,
-      priority: "LOW" as const,
-      status: "ACTIVE" as const,
-    },
-    {
-      name: "Framer",
-      vendor: "Framer BV",
-      categorySlug: "design",
-      planName: "Pro trial",
-      priceCents: 0,
-      billingCycle: "TRIAL" as const,
-      status: "TRIAL" as const,
-      renewalInDays: 6,
-      expirationInDays: 6,
-      emailUsed: user.email,
-      priority: "MEDIUM" as const,
-    },
-  ];
-
-  for (const sample of sampleAssets) {
-    const asset = await prisma.asset.create({
-      data: {
-        userId: user.id,
-        categoryId: categoryBySlug.get(sample.categorySlug) ?? null,
-        name: sample.name,
-        vendor: sample.vendor,
-        planName: sample.planName,
-        priceCents: sample.priceCents,
-        currency: "USD",
-        billingCycle: sample.billingCycle,
-        status: sample.status ?? "ACTIVE",
-        renewalDate: sample.renewalInDays !== undefined ? daysFromNow(sample.renewalInDays) : null,
-        expirationDate:
-          sample.expirationInDays !== undefined ? daysFromNow(sample.expirationInDays) : null,
-        purchaseDate: daysFromNow(-90),
-        startDate: daysFromNow(-90),
-        autoRenew: true,
-        websiteUrl: sample.websiteUrl,
-        billingUrl: sample.billingUrl,
-        emailUsed: sample.emailUsed,
-        priority: sample.priority,
-        isFavorite: sample.isFavorite ?? false,
-        apiKeyEncrypted: sample.apiKey ? encryptSecret(sample.apiKey) : null,
-        tags: [sample.categorySlug],
-      },
-    });
-
-    if (sample.credits) {
-      await prisma.creditBalance.create({
-        data: {
-          assetId: asset.id,
-          period: sample.credits.period,
-          totalCredits: sample.credits.total,
-          usedCredits: sample.credits.used,
-          resetsAt: daysFromNow(sample.credits.resetInDays),
-          lastResetAt: daysFromNow(sample.credits.resetInDays - 30),
-        },
-      });
-    }
-  }
-
-  await prisma.notificationPreference.upsert({
-    where: { userId: user.id },
-    update: {},
-    create: { userId: user.id },
-  });
-
-  console.log(`Seeded ${sampleAssets.length} sample assets for ${user.email}.`);
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+
+  categories       Category[]
+  assets           Asset[]
+  calendarEvents   CalendarEvent[]
+  activityLogs     ActivityLog[]
+  notificationPrefs NotificationPreference?
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+enum AssetStatus {
+  ACTIVE
+  TRIAL
+  EXPIRED
+  CANCELLED
+  ARCHIVED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+  LIFETIME
+  TRIAL
+  FREE
+  ONE_TIME
+  CUSTOM
+}
+
+enum CreditPeriod {
+  DAILY
+  MONTHLY
+  LIFETIME
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  slug      String
+  icon      String?
+  color     String?
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets Asset[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+  @@map("categories")
+}
+
+model Asset {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String?
+
+  name        String
+  logoUrl     String?
+  description String?
+  vendor      String?
+  websiteUrl  String?
+  billingUrl  String?
+  dashboardUrl String?
+  planName    String?
+
+  status     AssetStatus  @default(ACTIVE)
+  billingCycle BillingCycle @default(MONTHLY)
+  purchaseDate  DateTime?
+  startDate     DateTime?
+  renewalDate   DateTime?
+  expirationDate DateTime?
+  autoRenew     Boolean      @default(true)
+
+  priceCents   Int?     @default(0)
+  currency     String   @default("USD")
+
+  paymentMethod  String?
+  invoiceNumber  String?
+  purchasedFrom  String?
+  orderId        String?
+
+  licenseKeyEncrypted String?
+  apiKeyEncrypted     String?
+  notesEncrypted      String?
+
+  emailUsed      String?
+  username       String?
+  twoFactorEnabled Boolean @default(false)
+  recoveryEmail  String?
+
+  tags       String[] @default([])
+  priority   Priority @default(MEDIUM)
+  isFavorite Boolean  @default(false)
+  isHidden   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?         @relation(fields: [categoryId], references: [id])
+  credits     CreditBalance[]
+  attachments Attachment[]
+  customFields CustomFieldValue[]
+  reminders   Reminder[]
+  calendarEvents CalendarEvent[]
+  activityLogs ActivityLog[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, renewalDate])
+  @@index([categoryId])
+  @@map("assets")
+}
+
+model CreditBalance {
+  id         String       @id @default(cuid())
+  assetId    String
+  period     CreditPeriod @default(MONTHLY)
+  totalCredits    Float
+  usedCredits     Float   @default(0)
+  resetsAt        DateTime?
+  lastResetAt     DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("credit_balances")
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  assetId   String
+  fileName  String
+  fileType  String
+  fileSizeBytes Int
+  category  String
+  storageKey String
+  createdAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("attachments")
+}
+
+model CustomFieldValue {
+  id        String   @id @default(cuid())
+  assetId   String
+  label     String
+  value     String
+  createdAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("custom_field_values")
+}
+
+model Reminder {
+  id           String   @id @default(cuid())
+  assetId      String
+  daysBefore   Int
+  isCustom     Boolean  @default(false)
+  channel      String   @default("IN_APP")
+  triggeredAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("reminders")
+}
+
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String?
+  title     String
+  type      String
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@map("calendar_events")
+}
+
+model NotificationPreference {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  inAppEnabled  Boolean @default(true)
+  emailEnabled  Boolean @default(false)
+  browserEnabled Boolean @default(false)
+  defaultReminderDays Int[] @default([30, 7, 1])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("activity_logs")
+}
