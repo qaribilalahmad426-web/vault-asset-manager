@@ -1,3 +1,18 @@
+// ==========================================================================
+// Personal AI Asset Manager — Database Schema
+// PostgreSQL + Prisma
+//
+// Design notes:
+// - Single-tenant-per-user model: every domain row is scoped by userId so the
+//   schema is ready for multi-user (family/team) use later without a rewrite.
+// - Secrets (API keys, license keys, sensitive notes) are stored as
+//   ciphertext strings (AES-256-GCM, see src/lib/encryption.ts). The DB never
+//   sees plaintext.
+// - Money is stored as Int cents (never Float) to avoid rounding drift.
+// - CustomField/AttachmentValue pattern keeps the schema open-ended without
+//   needing a migration every time a user wants a new field.
+// ==========================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,6 +21,10 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// --------------------------------------------------------------------------
+// Auth (Better Auth compatible shape)
+// --------------------------------------------------------------------------
 
 model User {
   id            String    @id @default(cuid())
@@ -75,6 +94,10 @@ model Verification {
   @@map("verifications")
 }
 
+// --------------------------------------------------------------------------
+// Core domain
+// --------------------------------------------------------------------------
+
 enum AssetStatus {
   ACTIVE
   TRIAL
@@ -129,6 +152,7 @@ model Asset {
   userId     String
   categoryId String?
 
+  // Identity
   name        String
   logoUrl     String?
   description String?
@@ -138,6 +162,7 @@ model Asset {
   dashboardUrl String?
   planName    String?
 
+  // Status & lifecycle
   status     AssetStatus  @default(ACTIVE)
   billingCycle BillingCycle @default(MONTHLY)
   purchaseDate  DateTime?
@@ -146,23 +171,28 @@ model Asset {
   expirationDate DateTime?
   autoRenew     Boolean      @default(true)
 
+  // Money — stored as integer minor units (cents) to avoid float drift
   priceCents   Int?     @default(0)
   currency     String   @default("USD")
 
+  // Purchase / accounting metadata
   paymentMethod  String?
   invoiceNumber  String?
   purchasedFrom  String?
   orderId        String?
 
+  // Secrets — always ciphertext (AES-256-GCM), never plaintext
   licenseKeyEncrypted String?
   apiKeyEncrypted     String?
   notesEncrypted      String?
 
+  // Account metadata
   emailUsed      String?
   username       String?
   twoFactorEnabled Boolean @default(false)
   recoveryEmail  String?
 
+  // Organization
   tags       String[] @default([])
   priority   Priority @default(MEDIUM)
   isFavorite Boolean  @default(false)
@@ -210,8 +240,8 @@ model Attachment {
   fileName  String
   fileType  String
   fileSizeBytes Int
-  category  String
-  storageKey String
+  category  String   // invoice | receipt | license | contract | screenshot | other
+  storageKey String  // key/path in the storage adapter (see lib/storage)
   createdAt DateTime @default(now())
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
@@ -236,9 +266,9 @@ model CustomFieldValue {
 model Reminder {
   id           String   @id @default(cuid())
   assetId      String
-  daysBefore   Int
+  daysBefore   Int      // 30, 14, 7, 3, 1, 0 = expiry day, negative not allowed
   isCustom     Boolean  @default(false)
-  channel      String   @default("IN_APP")
+  channel      String   @default("IN_APP") // IN_APP | EMAIL | BROWSER
   triggeredAt  DateTime?
   createdAt    DateTime @default(now())
 
@@ -253,7 +283,7 @@ model CalendarEvent {
   userId    String
   assetId   String?
   title     String
-  type      String
+  type      String   // RENEWAL | CREDIT_RESET | INVOICE | PAYMENT | EXPIRY | CUSTOM
   date      DateTime
   notes     String?
   createdAt DateTime @default(now())
@@ -282,7 +312,7 @@ model ActivityLog {
   id        String   @id @default(cuid())
   userId    String
   assetId   String?
-  action    String
+  action    String   // CREATED | UPDATED | ARCHIVED | DELETED | RENEWED | FAVORITED ...
   metadata  Json?
   createdAt DateTime @default(now())
 
