@@ -215,8 +215,6 @@ export async function duplicateAsset(assetId: string) {
   return copy;
 }
 
-export type AssetListItem = Prisma.AssetGetPayload<{ include: { category: true } }>;
-
 export async function getAssets(rawFilters: Partial<Prisma.AssetWhereInput> & Record<string, unknown> = {}) {
   const session = await requireSession();
   const filters = assetFilterSchema.parse(rawFilters);

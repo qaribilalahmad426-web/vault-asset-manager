@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 
 export const billingCycleEnum = z.enum([
   "MONTHLY",
@@ -73,3 +74,12 @@ export const assetFilterSchema = z.object({
 });
 
 export type AssetFilterValues = z.infer<typeof assetFilterSchema>;
+
+/**
+ * The shape of an asset as returned by list/detail queries (includes its
+ * category relation). Lives here — not in actions.ts — because files with
+ * a top-level "use server" directive may only export async functions;
+ * Next.js's server-action compiler rejects type/const/interface exports
+ * from those files even though TypeScript erases them at compile time.
+ */
+export type AssetListItem = Prisma.AssetGetPayload<{ include: { category: true } }>;
