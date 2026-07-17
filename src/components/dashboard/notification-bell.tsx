@@ -31,14 +31,22 @@ export function NotificationBell() {
 
   useEffect(() => {
     startTransition(async () => {
-      const items = await getNotifications();
-      setNotifications(items);
+      try {
+        const items = await getNotifications();
+        setNotifications(items);
+      } catch {
+        // Silently ignore — session may not be available yet or DB unreachable
+      }
     });
     // Re-check every 5 minutes so the badge stays fresh during a long session.
     const interval = setInterval(() => {
       startTransition(async () => {
-        const items = await getNotifications();
-        setNotifications(items);
+        try {
+          const items = await getNotifications();
+          setNotifications(items);
+        } catch {
+          // Silently ignore
+        }
       });
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
