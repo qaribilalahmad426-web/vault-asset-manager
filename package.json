@@ -66,5 +66,8 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "react-is": "^19.0.0"
   }
 }

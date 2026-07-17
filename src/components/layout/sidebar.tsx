@@ -45,7 +45,8 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3 scrollbar-thin">
         {navItems.map((item) => {
-          const active = pathname.startsWith(item.href);
+          const itemBasePath = item.href.split("#")[0];
+          const active = pathname === itemBasePath || (pathname.startsWith(itemBasePath + "/") && itemBasePath !== "/dashboard");
           const disabled = item.phase > 1;
           const Content = (
             <>
