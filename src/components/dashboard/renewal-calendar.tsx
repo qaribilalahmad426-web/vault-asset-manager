@@ -19,7 +19,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { formatMoney, cn, daysUntil } from "@/lib/utils";
-import type { CalendarFeedItem } from "@/features/dashboard/types";
+interface CalendarFeedItem {
+  id: string;
+  name: string;
+  date: string;
+  dateType: "renewal" | "expiration";
+  priceCents: number | null;
+  currency: string;
+  emailUsed: string | null;
+  billingUrl: string | null;
+  websiteUrl: string | null;
+  status: string;
+}
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

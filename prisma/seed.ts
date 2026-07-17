@@ -13,7 +13,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { encryptSecret } from "../src/lib/encryption";
-import { DEFAULT_CATEGORIES } from "../src/features/categories/constants";
+import { DEFAULT_CATEGORIES } from "../src/features/categories/actions";
 
 const prisma = new PrismaClient();
 
