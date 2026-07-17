@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/session";
+export const dynamic = "force-dynamic";
 import { getNotificationPreferences } from "@/features/settings/actions";
 import { NotificationSettingsForm } from "@/features/settings/components/notification-settings-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -3,6 +3,8 @@ import { getAssets } from "@/features/assets/actions";
 import { getCategories } from "@/features/categories/actions";
 import { AssetsExplorer } from "@/features/assets/components/assets-explorer";
 
+export const dynamic = "force-dynamic";
+
 export default async function AssetsPage() {
   const [assets, categories] = await Promise.all([getAssets({}), getCategories()]);
 
@@ -21,3 +23,4 @@ export default async function AssetsPage() {
     </div>
   );
 }
+
