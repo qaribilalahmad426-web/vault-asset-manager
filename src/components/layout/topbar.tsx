@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, LogOut, Plus } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { Button } from "@/components/ui/button";
@@ -29,7 +28,11 @@ export function Topbar({ userName, userEmail, userImage, showNewAsset }: TopbarP
   const router = useRouter();
 
   async function handleSignOut() {
-    await authClient.signOut();
+    try {
+      await fetch("/api/auth/sign-out", { method: "POST" });
+    } catch {
+      // ignore
+    }
     router.push("/sign-in");
     router.refresh();
   }
