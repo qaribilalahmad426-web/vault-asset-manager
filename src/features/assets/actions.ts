@@ -2,10 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
 import { encryptSecret } from "@/lib/encryption";
 import { assetFilterSchema, assetFormSchema, type AssetFormValues } from "./schema";
 import type { Prisma } from "@prisma/client";
+
+// For write operations (create/duplicate) we still need a userId because the
+// schema requires it.  ADMIN_USER_ID is the single owner of all records.
+// For read operations we query all records without any userId filter.
+const OWNER_ID = process.env.ADMIN_USER_ID ?? "default-owner";
 
 function toDate(value: string | undefined | null) {
   if (!value) return null;
@@ -17,14 +21,12 @@ function toCents(price: number) {
   return Math.round(price * 100);
 }
 
-/** Server-side validated create. Encrypts any secret fields before writing. */
 export async function createAsset(input: AssetFormValues) {
-  const session = await requireSession();
   const data = assetFormSchema.parse(input);
 
   const asset = await prisma.asset.create({
     data: {
-      userId: session.user.id,
+      userId: OWNER_ID,
       name: data.name,
       logoUrl: data.logoUrl || null,
       description: data.description || null,
@@ -61,7 +63,7 @@ export async function createAsset(input: AssetFormValues) {
   });
 
   await prisma.activityLog.create({
-    data: { userId: session.user.id, assetId: asset.id, action: "CREATED" },
+    data: { userId: OWNER_ID, assetId: asset.id, action: "CREATED" },
   });
 
   revalidatePath("/dashboard");
@@ -70,12 +72,9 @@ export async function createAsset(input: AssetFormValues) {
 }
 
 export async function updateAsset(assetId: string, input: AssetFormValues) {
-  const session = await requireSession();
   const data = assetFormSchema.parse(input);
 
-  const existing = await prisma.asset.findFirst({
-    where: { id: assetId, userId: session.user.id },
-  });
+  const existing = await prisma.asset.findFirst({ where: { id: assetId } });
   if (!existing) throw new Error("Asset not found");
 
   const asset = await prisma.asset.update({
@@ -103,8 +102,6 @@ export async function updateAsset(assetId: string, input: AssetFormValues) {
       invoiceNumber: data.invoiceNumber || null,
       purchasedFrom: data.purchasedFrom || null,
       orderId: data.orderId || null,
-      // Secrets are only re-encrypted if the user actually typed a new value;
-      // the form sends back the masked placeholder otherwise (see AssetForm).
       ...(data.licenseKey ? { licenseKeyEncrypted: encryptSecret(data.licenseKey) } : {}),
       ...(data.apiKey ? { apiKeyEncrypted: encryptSecret(data.apiKey) } : {}),
       ...(data.notes ? { notesEncrypted: encryptSecret(data.notes) } : {}),
@@ -119,43 +116,32 @@ export async function updateAsset(assetId: string, input: AssetFormValues) {
   });
 
   await prisma.activityLog.create({
-    data: { userId: session.user.id, assetId: asset.id, action: "UPDATED" },
+    data: { userId: OWNER_ID, assetId: asset.id, action: "UPDATED" },
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/assets");
-  revalidatePath(`/assets/${assetId}`);
-  return asset;
-}
-
-async function assertOwnership(assetId: string, userId: string) {
-  const asset = await prisma.asset.findFirst({ where: { id: assetId, userId } });
-  if (!asset) throw new Error("Asset not found");
   return asset;
 }
 
 export async function deleteAsset(assetId: string) {
-  const session = await requireSession();
-  await assertOwnership(assetId, session.user.id);
   await prisma.asset.delete({ where: { id: assetId } });
   revalidatePath("/dashboard");
   revalidatePath("/assets");
 }
 
 export async function archiveAsset(assetId: string) {
-  const session = await requireSession();
-  await assertOwnership(assetId, session.user.id);
   await prisma.asset.update({ where: { id: assetId }, data: { status: "ARCHIVED" } });
   await prisma.activityLog.create({
-    data: { userId: session.user.id, assetId, action: "ARCHIVED" },
+    data: { userId: OWNER_ID, assetId, action: "ARCHIVED" },
   });
   revalidatePath("/dashboard");
   revalidatePath("/assets");
 }
 
 export async function toggleFavorite(assetId: string) {
-  const session = await requireSession();
-  const asset = await assertOwnership(assetId, session.user.id);
+  const asset = await prisma.asset.findFirst({ where: { id: assetId } });
+  if (!asset) throw new Error("Asset not found");
   const updated = await prisma.asset.update({
     where: { id: assetId },
     data: { isFavorite: !asset.isFavorite },
@@ -166,12 +152,12 @@ export async function toggleFavorite(assetId: string) {
 }
 
 export async function duplicateAsset(assetId: string) {
-  const session = await requireSession();
-  const asset = await assertOwnership(assetId, session.user.id);
+  const asset = await prisma.asset.findFirst({ where: { id: assetId } });
+  if (!asset) throw new Error("Asset not found");
 
   const copy = await prisma.asset.create({
     data: {
-      userId: asset.userId,
+      userId: OWNER_ID,
       categoryId: asset.categoryId,
       name: `${asset.name} (copy)`,
       logoUrl: asset.logoUrl,
@@ -208,20 +194,19 @@ export async function duplicateAsset(assetId: string) {
   });
 
   await prisma.activityLog.create({
-    data: { userId: session.user.id, assetId: copy.id, action: "CREATED" },
+    data: { userId: OWNER_ID, assetId: copy.id, action: "CREATED" },
   });
 
   revalidatePath("/assets");
   return copy;
 }
 
-
-export async function getAssets(rawFilters: Partial<Prisma.AssetWhereInput> & Record<string, unknown> = {}) {
-  const session = await requireSession();
+export async function getAssets(
+  rawFilters: Partial<Prisma.AssetWhereInput> & Record<string, unknown> = {}
+) {
   const filters = assetFilterSchema.parse(rawFilters);
 
   const where: Prisma.AssetWhereInput = {
-    userId: session.user.id,
     isHidden: false,
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.status ? { status: filters.status } : {}),
@@ -257,20 +242,18 @@ export async function getAssets(rawFilters: Partial<Prisma.AssetWhereInput> & Re
 }
 
 export async function getAssetById(assetId: string) {
-  const session = await requireSession();
   return prisma.asset.findFirst({
-    where: { id: assetId, userId: session.user.id },
+    where: { id: assetId },
     include: { category: true, credits: true, attachments: true, customFields: true },
   });
 }
 
-/**
- * Decrypts a single secret field for the authenticated owner only, so it can
- * be copied to the clipboard. Never logs or persists the plaintext.
- */
-export async function revealAssetSecret(assetId: string, field: "licenseKey" | "apiKey" | "notes") {
-  const session = await requireSession();
-  const asset = await assertOwnership(assetId, session.user.id);
+export async function revealAssetSecret(
+  assetId: string,
+  field: "licenseKey" | "apiKey" | "notes"
+) {
+  const asset = await prisma.asset.findFirst({ where: { id: assetId } });
+  if (!asset) return null;
 
   const columnMap = {
     licenseKey: asset.licenseKeyEncrypted,

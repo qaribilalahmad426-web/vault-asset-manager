@@ -1,42 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, LogOut, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { initials } from "@/lib/utils";
 
 interface TopbarProps {
-  userName: string;
-  userEmail: string;
-  userImage?: string | null;
   showNewAsset?: boolean;
 }
 
-export function Topbar({ userName, userEmail, userImage, showNewAsset }: TopbarProps) {
-  const router = useRouter();
-
-  async function handleSignOut() {
-    try {
-      await fetch("/api/auth/sign-out", { method: "POST" });
-    } catch {
-      // ignore
-    }
-    router.push("/sign-in");
-    router.refresh();
-  }
-
+export function Topbar({ showNewAsset }: TopbarProps) {
   return (
     <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-surface/80 px-6 backdrop-blur-sm">
       <button
@@ -61,29 +35,6 @@ export function Topbar({ userName, userEmail, userImage, showNewAsset }: TopbarP
         )}
         <ThemeToggle />
         <NotificationBell />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Avatar>
-                {userImage && <AvatarImage src={userImage} alt={userName} />}
-                <AvatarFallback>{initials(userName)}</AvatarFallback>
-              </Avatar>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>
-              <div className="flex flex-col">
-                <span className="font-medium text-foreground">{userName}</span>
-                <span className="text-xs text-muted-foreground">{userEmail}</span>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} destructive>
-              <LogOut />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </header>
   );

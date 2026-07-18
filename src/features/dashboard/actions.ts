@@ -1,7 +1,6 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
 import { daysUntil } from "@/lib/utils";
 
 /** Normalizes any billing cycle + price into an equivalent monthly cost. */
@@ -21,11 +20,8 @@ function toMonthlyCents(priceCents: number | null, cycle: string): number {
 }
 
 export async function getDashboardStats() {
-  const session = await requireSession();
-  const userId = session.user.id;
-
   const assets = await prisma.asset.findMany({
-    where: { userId, isHidden: false },
+    where: { isHidden: false },
     include: { category: true },
   });
 
@@ -48,18 +44,12 @@ export async function getDashboardStats() {
   const yearlySpendCents = monthlySpendCents * 12;
   const averageMonthlyCostCents = active.length ? monthlySpendCents / active.length : 0;
 
-  const credits = await prisma.creditBalance.findMany({
-    where: { asset: { userId } },
-  });
+  const credits = await prisma.creditBalance.findMany({});
   const totalCreditsRemaining = credits.reduce(
     (sum, c) => sum + Math.max(c.totalCredits - c.usedCredits, 0),
     0
   );
 
-  // Heuristic for "unused": active, non-favorite, never opened via dashboard
-  // in the last 30 days according to activity log — a real usage signal is
-  // wired in Phase 5's AI module; for now we flag by favorite+priority as a
-  // stand-in signal so the card is meaningful rather than fake.
   const potentiallyUnused = active.filter(
     (a) => !a.isFavorite && a.priority === "LOW" && a.priceCents && a.priceCents > 0
   );
@@ -92,7 +82,7 @@ export async function getDashboardStats() {
 interface CalendarFeedItem {
   id: string;
   name: string;
-  date: string; // ISO date — renewalDate, falling back to expirationDate
+  date: string;
   dateType: "renewal" | "expiration";
   priceCents: number | null;
   currency: string;
@@ -102,17 +92,9 @@ interface CalendarFeedItem {
   status: string;
 }
 
-/**
- * Lightweight feed for the renewal calendar — only the fields the calendar
- * and its day-detail popover actually render, so the client payload stays
- * small even with a large asset library.
- */
 export async function getCalendarFeed(): Promise<CalendarFeedItem[]> {
-  const session = await requireSession();
-
   const assets = await prisma.asset.findMany({
     where: {
-      userId: session.user.id,
       isHidden: false,
       status: { in: ["ACTIVE", "TRIAL"] },
       OR: [{ renewalDate: { not: null } }, { expirationDate: { not: null } }],

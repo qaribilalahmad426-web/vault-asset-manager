@@ -1,11 +1,9 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
 import { daysUntil, getExpiryUrgency, formatMoney } from "@/lib/utils";
 import type { NotificationItem } from "@/types";
 
-/** Human phrasing for a day count: "today", "tomorrow", "in 5 days", "3 days ago". */
 function relativeDay(days: number): string {
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
@@ -15,19 +13,14 @@ function relativeDay(days: number): string {
 }
 
 /**
- * Computes the current set of notifications for the signed-in user by
- * scanning live asset and credit data — nothing is pre-stored, so this is
- * always accurate to the second it's called. Read/dismissed state is kept
- * client-side (Zustand); see ROADMAP Phase 3 for a persisted reminder log.
+ * Computes the current notification set by scanning live asset/credit data.
+ * No user session required — queries all records.
  */
 export async function getNotifications(): Promise<NotificationItem[]> {
-  const session = await requireSession();
-  const userId = session.user.id;
   const notifications: NotificationItem[] = [];
 
   const assets = await prisma.asset.findMany({
     where: {
-      userId,
       isHidden: false,
       status: { in: ["ACTIVE", "TRIAL"] },
     },
@@ -72,7 +65,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   }
 
   const creditBalances = await prisma.creditBalance.findMany({
-    where: { asset: { userId, isHidden: false } },
+    where: { asset: { isHidden: false } },
     include: { asset: { select: { id: true, name: true } } },
   });
 

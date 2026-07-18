@@ -1,18 +1,16 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 
+const OWNER_ID = process.env.ADMIN_USER_ID ?? "default-owner";
+
 export async function getNotificationPreferences() {
-  const session = await requireSession();
-  const existing = await prisma.notificationPreference.findUnique({
-    where: { userId: session.user.id },
-  });
+  const existing = await prisma.notificationPreference.findFirst();
   if (existing) return existing;
 
   return prisma.notificationPreference.create({
-    data: { userId: session.user.id },
+    data: { userId: OWNER_ID },
   });
 }
 
@@ -22,12 +20,12 @@ export async function updateNotificationPreferences(patch: {
   browserEnabled: boolean;
   defaultReminderDays: number[];
 }) {
-  const session = await requireSession();
-  const updated = await prisma.notificationPreference.upsert({
-    where: { userId: session.user.id },
-    update: patch,
-    create: { userId: session.user.id, ...patch },
-  });
+  const existing = await prisma.notificationPreference.findFirst();
+
+  const updated = existing
+    ? await prisma.notificationPreference.update({ where: { id: existing.id }, data: patch })
+    : await prisma.notificationPreference.create({ data: { userId: OWNER_ID, ...patch } });
+
   revalidatePath("/settings");
   return updated;
 }

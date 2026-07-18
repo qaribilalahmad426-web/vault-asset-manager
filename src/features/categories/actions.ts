@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
+
+const OWNER_ID = process.env.ADMIN_USER_ID ?? "default-owner";
 
 const DEFAULT_CATEGORIES: { name: string; slug: string; icon: string; color: string }[] = [
   { name: "AI Tools", slug: "ai-tools", icon: "sparkles", color: "#6366f1" },
@@ -22,30 +23,21 @@ const DEFAULT_CATEGORIES: { name: string; slug: string; icon: string; color: str
   { name: "SaaS", slug: "saas", icon: "layout-grid", color: "#64748b" },
 ];
 
-/**
- * Ensures a new user has the default category set. Safe to call on every
- * assets-page load — it's a no-op after the first call because of the
- * (userId, slug) unique constraint + skipDuplicates.
- */
 export async function ensureDefaultCategories() {
-  const session = await requireSession();
   await prisma.category.createMany({
-    data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId: session.user.id, isSystem: true })),
+    data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId: OWNER_ID, isSystem: true })),
     skipDuplicates: true,
   });
 }
 
 export async function getCategories() {
-  const session = await requireSession();
   await ensureDefaultCategories();
   return prisma.category.findMany({
-    where: { userId: session.user.id },
     orderBy: { name: "asc" },
   });
 }
 
 export async function createCategory(name: string, color?: string) {
-  const session = await requireSession();
   const slug = name
     .toLowerCase()
     .trim()
@@ -53,6 +45,6 @@ export async function createCategory(name: string, color?: string) {
     .replace(/(^-|-$)/g, "");
 
   return prisma.category.create({
-    data: { userId: session.user.id, name, slug, color: color ?? "#6366f1" },
+    data: { userId: OWNER_ID, name, slug, color: color ?? "#6366f1" },
   });
 }
