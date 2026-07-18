@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { useEffect, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { Bell, Check, X, Loader2 } from "lucide-react";
 import { getNotifications } from "@/features/notifications/actions";
 import { useUiStore } from "@/store/ui-store";
-import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -20,22 +19,27 @@ const urgencyDot: Record<NotificationUrgency, string> = {
 };
 
 export function NotificationBell() {
-  // useShallow prevents infinite re-renders caused by .filter() returning
-  // a new array reference on every Zustand store update (React error #185).
-  const { notifications, unreadCount, readIds, setNotifications, markAsRead, markAllAsRead, dismissNotification } =
-    useUiStore(
-      useShallow((s) => ({
-        notifications: s.notifications.filter((n) => !s.dismissedIds.includes(n.id)),
-        unreadCount: s.notifications.filter(
-          (n) => !s.dismissedIds.includes(n.id) && !s.readIds.includes(n.id)
-        ).length,
-        readIds: s.readIds,
-        setNotifications: s.setNotifications,
-        markAsRead: s.markAsRead,
-        markAllAsRead: s.markAllAsRead,
-        dismissNotification: s.dismissNotification,
-      }))
-    );
+  // Subscribe to stable raw arrays from the store.
+  // Using individual selectors for primitive / stable refs only —
+  // we derive computed arrays with useMemo so Zustand never compares
+  // new array references and triggers extra re-renders.
+  const allNotifications = useUiStore((s) => s.notifications);
+  const dismissedIds    = useUiStore((s) => s.dismissedIds);
+  const readIds         = useUiStore((s) => s.readIds);
+  const setNotifications  = useUiStore((s) => s.setNotifications);
+  const markAsRead        = useUiStore((s) => s.markAsRead);
+  const markAllAsRead     = useUiStore((s) => s.markAllAsRead);
+  const dismissNotification = useUiStore((s) => s.dismissNotification);
+
+  const notifications = useMemo(
+    () => allNotifications.filter((n) => !dismissedIds.includes(n.id)),
+    [allNotifications, dismissedIds]
+  );
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !readIds.includes(n.id)).length,
+    [notifications, readIds]
+  );
 
   const [isPending, startTransition] = useTransition();
 
@@ -45,10 +49,10 @@ export function NotificationBell() {
         const items = await getNotifications();
         setNotifications(items);
       } catch {
-        // Silently ignore — session may not be available yet or DB unreachable
+        // Silently ignore if DB unreachable
       }
     });
-    // Re-check every 5 minutes so the badge stays fresh during a long session.
+
     const interval = setInterval(() => {
       startTransition(async () => {
         try {
@@ -59,6 +63,7 @@ export function NotificationBell() {
         }
       });
     }, 5 * 60 * 1000);
+
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
