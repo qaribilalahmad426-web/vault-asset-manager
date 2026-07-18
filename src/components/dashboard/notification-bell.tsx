@@ -4,7 +4,8 @@ import { useEffect, useTransition } from "react";
 import Link from "next/link";
 import { Bell, Check, X, Loader2 } from "lucide-react";
 import { getNotifications } from "@/features/notifications/actions";
-import { useUiStore, selectVisibleNotifications, selectUnreadCount } from "@/store/ui-store";
+import { useUiStore } from "@/store/ui-store";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -19,13 +20,22 @@ const urgencyDot: Record<NotificationUrgency, string> = {
 };
 
 export function NotificationBell() {
-  const notifications = useUiStore(selectVisibleNotifications);
-  const unreadCount = useUiStore(selectUnreadCount);
-  const readIds = useUiStore((s) => s.readIds);
-  const setNotifications = useUiStore((s) => s.setNotifications);
-  const markAsRead = useUiStore((s) => s.markAsRead);
-  const markAllAsRead = useUiStore((s) => s.markAllAsRead);
-  const dismissNotification = useUiStore((s) => s.dismissNotification);
+  // useShallow prevents infinite re-renders caused by .filter() returning
+  // a new array reference on every Zustand store update (React error #185).
+  const { notifications, unreadCount, readIds, setNotifications, markAsRead, markAllAsRead, dismissNotification } =
+    useUiStore(
+      useShallow((s) => ({
+        notifications: s.notifications.filter((n) => !s.dismissedIds.includes(n.id)),
+        unreadCount: s.notifications.filter(
+          (n) => !s.dismissedIds.includes(n.id) && !s.readIds.includes(n.id)
+        ).length,
+        readIds: s.readIds,
+        setNotifications: s.setNotifications,
+        markAsRead: s.markAsRead,
+        markAllAsRead: s.markAllAsRead,
+        dismissNotification: s.dismissNotification,
+      }))
+    );
 
   const [isPending, startTransition] = useTransition();
 

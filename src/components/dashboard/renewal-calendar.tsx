@@ -57,11 +57,15 @@ const dotClasses: Record<"red" | "orange" | "green", string> = {
 export function RenewalCalendar({ items }: { items: CalendarFeedItem[] }) {
   const [cursor, setCursor] = useState(() => new Date());
 
-  const monthStart = startOfMonth(cursor);
-  const monthEnd = endOfMonth(cursor);
-  const gridStart = startOfWeek(monthStart);
-  const gridEnd = endOfWeek(monthEnd);
-  const days = useMemo(() => eachDayOfInterval({ start: gridStart, end: gridEnd }), [gridStart, gridEnd]);
+  const days = useMemo(() => {
+
+    const monthStart = startOfMonth(cursor);
+    const monthEnd = endOfMonth(cursor);
+    const gridStart = startOfWeek(monthStart);
+    const gridEnd = endOfWeek(monthEnd);
+    return eachDayOfInterval({ start: gridStart, end: gridEnd });
+  }, [cursor]);
+
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, CalendarFeedItem[]>();

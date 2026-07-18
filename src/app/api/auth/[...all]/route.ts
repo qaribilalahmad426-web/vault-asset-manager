@@ -1,4 +1,11 @@
-import { auth } from "@/lib/auth";
-import { toNextJsHandler } from "better-auth/next-js";
+import { NextResponse } from "next/server";
 
-export const { GET, POST } = toNextJsHandler(auth);
+// Auth has been removed. This route returns 404 to prevent
+// better-auth from being initialized during the build.
+export function GET() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+export function POST() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
